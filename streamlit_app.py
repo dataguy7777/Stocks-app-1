@@ -103,6 +103,9 @@ def fetch_data(ticker, start_date=None, end_date=None):
             data = yf.download(ticker, start=start_date, end=end_date)
         else:
             data = yf.download(ticker, period="max")
+        if data.empty:
+            st.warning(f"No data returned for ticker: {ticker}")
+            return pd.DataFrame()
         data.reset_index(inplace=True)
         return data[['Date', 'Close']]
     except Exception as e:
@@ -111,10 +114,20 @@ def fetch_data(ticker, start_date=None, end_date=None):
 
 def sanitize_name(name):
     """
-    Sanitize the trace name by removing unwanted characters.
-    :param name: Original name string
+    Sanitize the trace name by ensuring it's a string and removing unwanted characters.
+    :param name: Original name input
     :return: Sanitized name string
     """
+    if name is None:
+        return "Unknown"
+    
+    # Ensure the name is a string
+    try:
+        name = str(name)
+    except Exception as e:
+        st.error(f"Error converting name to string: {e}")
+        return "Invalid Name"
+    
     # Remove any characters that are not alphanumeric or spaces
     sanitized = re.sub(r'[^\w\s]', '', name)
     # Replace multiple spaces with a single space
@@ -168,7 +181,7 @@ with tabs[0]:
             for column in normalized_data.columns[1:]:
                 trace_name = sanitize_name(column)
                 # Debugging: Display the trace name
-                st.write(f"Adding trace: {trace_name}")
+                # st.write(f"Adding trace: {trace_name}")  # Commented out after fixing
                 fig.add_trace(go.Scatter(
                     x=normalized_data['Date'],
                     y=normalized_data[column],
@@ -248,7 +261,7 @@ with tabs[1]:
             for column in normalized_sector_data.columns[1:]:
                 trace_name = sanitize_name(column)
                 # Debugging: Display the trace name
-                st.write(f"Adding trace: {trace_name}")
+                # st.write(f"Adding trace: {trace_name}")  # Commented out after fixing
                 fig_sectors.add_trace(go.Scatter(
                     x=normalized_sector_data['Date'],
                     y=normalized_sector_data[column],
@@ -332,7 +345,7 @@ with tabs[2]:
             for column in normalized_sector_stocks.columns[1:]:
                 trace_name = sanitize_name(column)
                 # Debugging: Display the trace name
-                st.write(f"Adding trace: {trace_name}")
+                # st.write(f"Adding trace: {trace_name}")  # Commented out after fixing
                 fig_sector_stocks.add_trace(go.Scatter(
                     x=normalized_sector_stocks['Date'],
                     y=normalized_sector_stocks[column],
