@@ -5,6 +5,7 @@ import pandas as pd
 import yfinance as yf
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
+import re  # For sanitizing names
 
 # Set the page configuration
 st.set_page_config(
@@ -97,12 +98,28 @@ def fetch_data(ticker, start_date=None, end_date=None):
     :param end_date: End date for data retrieval
     :return: DataFrame with Date and Close price
     """
-    if start_date and end_date:
-        data = yf.download(ticker, start=start_date, end=end_date)
-    else:
-        data = yf.download(ticker, period="max")
-    data.reset_index(inplace=True)
-    return data[['Date', 'Close']]
+    try:
+        if start_date and end_date:
+            data = yf.download(ticker, start=start_date, end=end_date)
+        else:
+            data = yf.download(ticker, period="max")
+        data.reset_index(inplace=True)
+        return data[['Date', 'Close']]
+    except Exception as e:
+        st.error(f"Error fetching data for {ticker}: {e}")
+        return pd.DataFrame()
+
+def sanitize_name(name):
+    """
+    Sanitize the trace name by removing unwanted characters.
+    :param name: Original name string
+    :return: Sanitized name string
+    """
+    # Remove any characters that are not alphanumeric or spaces
+    sanitized = re.sub(r'[^\w\s]', '', name)
+    # Replace multiple spaces with a single space
+    sanitized = re.sub(r'\s+', ' ', sanitized)
+    return sanitized.strip()
 
 # Performance Overview Tab
 with tabs[0]:
@@ -123,6 +140,9 @@ with tabs[0]:
         merged_data = pd.DataFrame()
         for name, ticker in tickers.items():
             data = fetch_data(ticker, start_date=user_start_date, end_date=user_end_date)
+            if data.empty:
+                st.warning(f"No data fetched for {name} ({ticker}). Skipping...")
+                continue
             data = data.rename(columns={'Close': name})
             if merged_data.empty:
                 merged_data = data
@@ -135,17 +155,25 @@ with tabs[0]:
             # Normalize the data to start at 100 for comparison
             normalized_data = merged_data.copy()
             for column in normalized_data.columns[1:]:
-                normalized_data[column] = (normalized_data[column] / normalized_data[column].iloc[0]) * 100
+                initial_value = normalized_data[column].iloc[0]
+                if initial_value == 0:
+                    st.warning(f"Initial value for {column} is 0. Skipping normalization.")
+                    normalized_data[column] = 0
+                else:
+                    normalized_data[column] = (normalized_data[column] / initial_value) * 100
             
             # Create Plotly figure
             fig = go.Figure()
             
             for column in normalized_data.columns[1:]:
+                trace_name = sanitize_name(column)
+                # Debugging: Display the trace name
+                st.write(f"Adding trace: {trace_name}")
                 fig.add_trace(go.Scatter(
                     x=normalized_data['Date'],
                     y=normalized_data[column],
                     mode='lines',
-                    name=column
+                    name=trace_name
                 ))
             
             # Update layout for better aesthetics
@@ -192,6 +220,9 @@ with tabs[1]:
         merged_sector_data = pd.DataFrame()
         for name, ticker in sector_tickers.items():
             data = fetch_data(ticker, start_date=user_start_date_sectors, end_date=user_end_date_sectors)
+            if data.empty:
+                st.warning(f"No data fetched for {name} ({ticker}). Skipping...")
+                continue
             data = data.rename(columns={'Close': name})
             if merged_sector_data.empty:
                 merged_sector_data = data
@@ -204,17 +235,25 @@ with tabs[1]:
             # Normalize the data to start at 100 for comparison
             normalized_sector_data = merged_sector_data.copy()
             for column in normalized_sector_data.columns[1:]:
-                normalized_sector_data[column] = (normalized_sector_data[column] / normalized_sector_data[column].iloc[0]) * 100
+                initial_value = normalized_sector_data[column].iloc[0]
+                if initial_value == 0:
+                    st.warning(f"Initial value for {column} is 0. Skipping normalization.")
+                    normalized_sector_data[column] = 0
+                else:
+                    normalized_sector_data[column] = (normalized_sector_data[column] / initial_value) * 100
             
             # Create Plotly figure for Sector ETFs
             fig_sectors = go.Figure()
             
             for column in normalized_sector_data.columns[1:]:
+                trace_name = sanitize_name(column)
+                # Debugging: Display the trace name
+                st.write(f"Adding trace: {trace_name}")
                 fig_sectors.add_trace(go.Scatter(
                     x=normalized_sector_data['Date'],
                     y=normalized_sector_data[column],
                     mode='lines',
-                    name=column
+                    name=trace_name
                 ))
             
             # Update layout for better aesthetics
@@ -264,6 +303,9 @@ with tabs[2]:
             merged_sector_stocks = pd.DataFrame()
             for stock in stock_list:
                 data = fetch_data(stock, start_date=user_start_ytd, end_date=user_end_ytd)
+                if data.empty:
+                    st.warning(f"No data fetched for {stock}. Skipping...")
+                    continue
                 data = data.rename(columns={'Close': stock})
                 if merged_sector_stocks.empty:
                     merged_sector_stocks = data
@@ -277,17 +319,25 @@ with tabs[2]:
             # Normalize the data to start at 100 for comparison
             normalized_sector_stocks = merged_sector_stocks.copy()
             for column in normalized_sector_stocks.columns[1:]:
-                normalized_sector_stocks[column] = (normalized_sector_stocks[column] / normalized_sector_stocks[column].iloc[0]) * 100
+                initial_value = normalized_sector_stocks[column].iloc[0]
+                if initial_value == 0:
+                    st.warning(f"Initial value for {column} is 0. Skipping normalization.")
+                    normalized_sector_stocks[column] = 0
+                else:
+                    normalized_sector_stocks[column] = (normalized_sector_stocks[column] / initial_value) * 100
             
             # Create Plotly figure for sector stocks
             fig_sector_stocks = go.Figure()
             
             for column in normalized_sector_stocks.columns[1:]:
+                trace_name = sanitize_name(column)
+                # Debugging: Display the trace name
+                st.write(f"Adding trace: {trace_name}")
                 fig_sector_stocks.add_trace(go.Scatter(
                     x=normalized_sector_stocks['Date'],
                     y=normalized_sector_stocks[column],
                     mode='lines',
-                    name=column
+                    name=trace_name
                 ))
             
             # Update layout for better aesthetics
