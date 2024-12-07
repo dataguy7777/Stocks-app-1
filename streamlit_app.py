@@ -313,4 +313,355 @@ with tabs[0]:
                     
                     # Optional: Display the merged data
                     with st.expander("Show Data Table"):
-                        st.dataframe(merged_data_perf.set_index('D
+                        st.dataframe(merged_data_perf.set_index('Date'))
+
+# Sector ETFs Tab (USA)
+with tabs[1]:
+    st.header("🔍 Sector ETFs Performance (USA)")
+    
+    # Sidebar for date range selection
+    st.sidebar.header("Select Date Range for Sector ETFs (USA)")
+    end_date_sectors_usa = datetime.today()
+    start_date_sectors_usa = get_first_day_of_year()
+    
+    user_start_date_sectors_usa = st.sidebar.date_input("Start date (Sector ETFs USA)", start_date_sectors_usa, key='sector_usa_start')
+    user_end_date_sectors_usa = st.sidebar.date_input("End date (Sector ETFs USA)", end_date_sectors_usa, key='sector_usa_end')
+    
+    if user_start_date_sectors_usa > user_end_date_sectors_usa:
+        st.sidebar.error("Error: Start date must be before end date for Sector ETFs.")
+    else:
+        # Fetch and merge sector ETF data for USA
+        merged_sector_data_usa = pd.DataFrame()
+        fetched_sectors_usa = []
+        for name, ticker in sector_etfs_usa.items():
+            data = fetch_data(ticker, start_date=user_start_date_sectors_usa, end_date=user_end_date_sectors_usa)
+            if data.empty:
+                st.warning(f"No data fetched for {name} ({ticker}). Skipping...")
+                continue
+            data = data.rename(columns={'Close': name})
+            merged_sector_data_usa = pd.merge(merged_sector_data_usa, data, on='Date', how='outer') if not merged_sector_data_usa.empty else data
+            fetched_sectors_usa.append(name)
+        
+        if merged_sector_data_usa.empty:
+            st.warning("No data available for the selected date range for Sector ETFs (USA).")
+        else:
+            # Sort by Date and forward-fill missing values
+            merged_sector_data_usa.sort_values('Date', inplace=True)
+            merged_sector_data_usa.fillna(method='ffill', inplace=True)
+            
+            # Drop duplicates if any and reset index
+            merged_sector_data_usa = merged_sector_data_usa.drop_duplicates(subset='Date').reset_index(drop=True)
+            
+            # Check if 'Date' column exists
+            if 'Date' not in merged_sector_data_usa.columns:
+                st.error("Error: 'Date' column is missing after merging Sector ETFs (USA). Please check the data sources.")
+                st.stop()
+            
+            # Normalize the data to start at 100 for comparison
+            normalized_sector_data_usa = merged_sector_data_usa.copy()
+            for column in normalized_sector_data_usa.columns[1:]:
+                initial_value = normalized_sector_data_usa[column].iloc[0]
+                if initial_value == 0 or pd.isna(initial_value):
+                    st.warning(f"Initial value for {column} is 0 or NaN. Skipping normalization.")
+                    normalized_sector_data_usa[column] = 0
+                else:
+                    normalized_sector_data_usa[column] = (normalized_sector_data_usa[column] / initial_value) * 100
+            
+            # Determine available sectors in the merged DataFrame
+            available_sectors_usa = [sector for sector in fetched_sectors_usa if sector in normalized_sector_data_usa.columns]
+            if not available_sectors_usa:
+                st.warning("No sector ETFs available after merging.")
+            else:
+                # Multiselect for selecting which sector ETFs to display
+                selected_sectors_usa = st.multiselect(
+                    "Select Sector ETFs to Display",
+                    options=available_sectors_usa,
+                    default=available_sectors_usa
+                )
+                
+                if not selected_sectors_usa:
+                    st.warning("No sector ETFs selected to display.")
+                else:
+                    # Ensure selected sectors are present in the DataFrame
+                    selected_sectors_usa = [sector for sector in selected_sectors_usa if sector in normalized_sector_data_usa.columns]
+                    
+                    # Filter data based on selection
+                    filtered_sector_data_usa = normalized_sector_data_usa[['Date'] + selected_sectors_usa]
+                    
+                    # Create Plotly figure
+                    fig_sectors_usa = go.Figure()
+                    
+                    for column in filtered_sector_data_usa.columns[1:]:
+                        trace_name = sanitize_name(column)
+                        fig_sectors_usa.add_trace(go.Scatter(
+                            x=filtered_sector_data_usa['Date'],
+                            y=filtered_sector_data_usa[column],
+                            mode='lines',
+                            name=trace_name
+                        ))
+                    
+                    # Update layout for better aesthetics
+                    fig_sectors_usa.update_layout(
+                        title="Sector ETFs Performance Comparison (Normalized to 100)",
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price",
+                        hovermode="x unified",
+                        template="plotly_dark",
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
+                    
+                    st.plotly_chart(fig_sectors_usa, use_container_width=True)
+                    
+                    # Optional: Display the merged sector ETF data
+                    with st.expander("Show Sector ETFs Data Table (USA)"):
+                        st.dataframe(merged_sector_data_usa.set_index('Date'))
+
+# Top 10 USA Stocks YTD Tab
+with tabs[2]:
+    st.header("📈 Top 10 USA Stocks Year-To-Date (YTD) Performance")
+    
+    # Define YTD date range
+    current_year = datetime.today().year
+    ytd_start = datetime(current_year, 1, 1)
+    ytd_end = datetime.today()
+    
+    # Sidebar for YTD date range selection (optional customization)
+    st.sidebar.header("Select Date Range for YTD Performance (USA Stocks)")
+    user_start_ytd_usa = st.sidebar.date_input("Start date (YTD USA)", ytd_start, key='ytd_start_usa')
+    user_end_ytd_usa = st.sidebar.date_input("End date (YTD USA)", ytd_end, key='ytd_end_usa')
+    
+    if user_start_ytd_usa > user_end_ytd_usa:
+        st.sidebar.error("Error: Start date must be before end date for YTD Performance.")
+    else:
+        # Iterate through each sector
+        for sector, stock_list in sectors_top10_usa.items():
+            st.subheader(f"🔹 {sector} Sector - Top 10 USA Stocks")
+            
+            # Fetch and merge data for the sector
+            merged_sector_stocks_usa = pd.DataFrame()
+            fetched_stocks_usa = []
+            for stock in stock_list:
+                # Extract ticker from stock name
+                try:
+                    ticker = stock.split('(')[-1].strip(')')
+                except IndexError:
+                    st.warning(f"Invalid stock format: {stock}. Skipping...")
+                    continue
+                data = fetch_data(ticker, start_date=user_start_ytd_usa, end_date=user_end_ytd_usa)
+                if data.empty:
+                    st.warning(f"No data fetched for {stock} ({ticker}). Skipping...")
+                    continue
+                data = data.rename(columns={'Close': stock})
+                merged_sector_stocks_usa = pd.merge(merged_sector_stocks_usa, data, on='Date', how='outer') if not merged_sector_stocks_usa.empty else data
+                fetched_stocks_usa.append(stock)
+            
+            if merged_sector_stocks_usa.empty:
+                st.warning(f"No data available for the {sector} sector in the selected date range.")
+                continue
+            
+            # Sort by Date and forward-fill missing values
+            merged_sector_stocks_usa.sort_values('Date', inplace=True)
+            merged_sector_stocks_usa.fillna(method='ffill', inplace=True)
+            
+            # Drop duplicates if any and reset index
+            merged_sector_stocks_usa = merged_sector_stocks_usa.drop_duplicates(subset='Date').reset_index(drop=True)
+            
+            # Check if 'Date' column exists
+            if 'Date' not in merged_sector_stocks_usa.columns:
+                st.error(f"Error: 'Date' column is missing after merging stocks in the {sector} sector.")
+                st.stop()
+            
+            # Normalize the data to start at 100 for comparison
+            normalized_sector_stocks_usa = merged_sector_stocks_usa.copy()
+            for column in normalized_sector_stocks_usa.columns[1:]:
+                initial_value = normalized_sector_stocks_usa[column].iloc[0]
+                if initial_value == 0 or pd.isna(initial_value):
+                    st.warning(f"Initial value for {column} is 0 or NaN. Skipping normalization.")
+                    normalized_sector_stocks_usa[column] = 0
+                else:
+                    normalized_sector_stocks_usa[column] = (normalized_sector_stocks_usa[column] / initial_value) * 100
+            
+            # Determine available stocks in the merged DataFrame
+            available_stocks_usa = [stock for stock in fetched_stocks_usa if stock in normalized_sector_stocks_usa.columns]
+            if not available_stocks_usa:
+                st.warning(f"No stocks available after merging for {sector} sector.")
+                continue
+            
+            # Multiselect for selecting which stocks to display
+            selected_stocks_usa = st.multiselect(
+                f"Select Stocks to Display in {sector} Sector",
+                options=available_stocks_usa,
+                default=available_stocks_usa
+            )
+            
+            if not selected_stocks_usa:
+                st.warning(f"No stocks selected to display for {sector} sector.")
+                continue
+            
+            # Ensure selected stocks are present in the DataFrame
+            selected_stocks_usa = [stock for stock in selected_stocks_usa if stock in normalized_sector_stocks_usa.columns]
+            
+            # Filter data based on selection
+            filtered_sector_stocks_usa = normalized_sector_stocks_usa[['Date'] + selected_stocks_usa]
+            
+            # Create Plotly figure
+            fig_sector_stocks_usa = go.Figure()
+            
+            for column in filtered_sector_stocks_usa.columns[1:]:
+                trace_name = sanitize_name(column)
+                fig_sector_stocks_usa.add_trace(go.Scatter(
+                    x=filtered_sector_stocks_usa['Date'],
+                    y=filtered_sector_stocks_usa[column],
+                    mode='lines',
+                    name=trace_name
+                ))
+            
+            # Update layout for better aesthetics
+            fig_sector_stocks_usa.update_layout(
+                title=f"{sector} Sector Top 10 Stocks YTD Performance (Normalized to 100)",
+                xaxis_title="Date",
+                yaxis_title="Normalized Price",
+                hovermode="x unified",
+                template="plotly_dark",
+                height=600,
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+            
+            st.plotly_chart(fig_sector_stocks_usa, use_container_width=True)
+            
+            # Optional: Display the merged sector stocks data
+            with st.expander(f"Show {sector} Sector Stocks Data Table (USA)"):
+                st.dataframe(merged_sector_stocks_usa.set_index('Date'))
+
+# FTSE MIB Italy Tab
+with tabs[3]:
+    st.header("🇮🇹 FTSE MIB Italy Performance by Sector")
+    
+    # Sidebar for date range selection
+    st.sidebar.header("Select Date Range for FTSE MIB Italy")
+    end_date_ftse = datetime.today()
+    start_date_ftse = get_first_day_of_year()
+    
+    user_start_date_ftse = st.sidebar.date_input("Start date (FTSE MIB Italy)", start_date_ftse, key='ftse_start')
+    user_end_date_ftse = st.sidebar.date_input("End date (FTSE MIB Italy)", end_date_ftse, key='ftse_end')
+    
+    if user_start_date_ftse > user_end_date_ftse:
+        st.sidebar.error("Error: Start date must be before end date for FTSE MIB Italy.")
+    else:
+        # Fetch and merge FTSE MIB sector ETF data
+        merged_ftse_sector = pd.DataFrame()
+        fetched_sectors_ftse = []
+        for sector, ticker in sector_etfs_europe_it.items():
+            data = fetch_data(ticker, start_date=user_start_date_ftse, end_date=user_end_date_ftse)
+            if data.empty:
+                st.warning(f"No data fetched for {sector} Sector ({ticker}). Skipping...")
+                continue
+            data = data.rename(columns={'Close': sector})
+            merged_ftse_sector = pd.merge(merged_ftse_sector, data, on='Date', how='outer') if not merged_ftse_sector.empty else data
+            fetched_sectors_ftse.append(sector)
+        
+        if merged_ftse_sector.empty:
+            st.warning("No data available for the selected date range for FTSE MIB Italy.")
+        else:
+            # Sort by Date and forward-fill missing values
+            merged_ftse_sector.sort_values('Date', inplace=True)
+            merged_ftse_sector.fillna(method='ffill', inplace=True)
+            
+            # Drop duplicates if any and reset index
+            merged_ftse_sector = merged_ftse_sector.drop_duplicates(subset='Date').reset_index(drop=True)
+            
+            # Check if 'Date' column exists
+            if 'Date' not in merged_ftse_sector.columns:
+                st.error("Error: 'Date' column is missing after merging FTSE MIB Italy Sector ETFs. Please check the data sources.")
+                st.stop()
+            
+            # Normalize the data to start at 100 for comparison
+            normalized_ftse_sector = merged_ftse_sector.copy()
+            for column in normalized_ftse_sector.columns[1:]:
+                initial_value = normalized_ftse_sector[column].iloc[0]
+                if initial_value == 0 or pd.isna(initial_value):
+                    st.warning(f"Initial value for {column} is 0 or NaN. Skipping normalization.")
+                    normalized_ftse_sector[column] = 0
+                else:
+                    normalized_ftse_sector[column] = (normalized_ftse_sector[column] / initial_value) * 100
+            
+            # Determine available sectors in the merged DataFrame
+            available_sectors_ftse = [sector for sector in fetched_sectors_ftse if sector in normalized_ftse_sector.columns]
+            if not available_sectors_ftse:
+                st.warning("No sector ETFs available after merging for FTSE MIB Italy.")
+            else:
+                # Multiselect for selecting which sectors to display
+                selected_sectors_ftse = st.multiselect(
+                    "Select Sectors to Display",
+                    options=available_sectors_ftse,
+                    default=available_sectors_ftse
+                )
+                
+                if not selected_sectors_ftse:
+                    st.warning("No sectors selected to display for FTSE MIB Italy.")
+                else:
+                    # Ensure selected sectors are present in the DataFrame
+                    selected_sectors_ftse = [sector for sector in selected_sectors_ftse if sector in normalized_ftse_sector.columns]
+                    
+                    # Filter data based on selection
+                    filtered_ftse_sector = normalized_ftse_sector[['Date'] + selected_sectors_ftse]
+                    
+                    # Create Plotly figure
+                    fig_ftse = go.Figure()
+                    
+                    for column in filtered_ftse_sector.columns[1:]:
+                        trace_name = sanitize_name(column)
+                        fig_ftse.add_trace(go.Scatter(
+                            x=filtered_ftse_sector['Date'],
+                            y=filtered_ftse_sector[column],
+                            mode='lines',
+                            name=trace_name
+                        ))
+                    
+                    # Update layout for better aesthetics
+                    fig_ftse.update_layout(
+                        title="FTSE MIB Italy Sector Performance Comparison (Normalized to 100)",
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price",
+                        hovermode="x unified",
+                        template="plotly_dark",
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
+                    
+                    st.plotly_chart(fig_ftse, use_container_width=True)
+                    
+                    # Optional: Display the merged FTSE MIB sector data
+                    with st.expander("Show FTSE MIB Italy Sector Data Table"):
+                        st.dataframe(merged_ftse_sector.set_index('Date'))
+
+# Additional Insights Tab
+with tabs[4]:
+    st.header("📊 Additional Insights")
+    st.write("Content for Additional Insights goes here.")
+    st.write("""
+    ### Possible Enhancements:
+    - **Statistical Metrics:** Display metrics such as CAGR, volatility, and correlations between indices and ETFs.
+    - **Interactive Filters:** Allow users to select specific indices or ETFs to compare.
+    - **Different Chart Types:** Incorporate other Plotly chart types like candlestick charts or bar charts.
+    - **Download Options:** Enable users to download the displayed data or charts.
+    - **Real-Time Data:** Implement periodic data refreshes to keep the dashboard up-to-date.
+    """)
+
