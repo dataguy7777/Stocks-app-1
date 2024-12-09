@@ -200,7 +200,7 @@ with tabs[0]:
             st.warning("No data available for the selected date range.")
         else:
             merged_data_perf.sort_values('Date', inplace=True)
-            merged_data_perf.fillna(method='ffill', inplace=True)
+            merged_data_perf.ffill(inplace=True)
             try:
                 merged_data_perf = merged_data_perf.drop_duplicates(subset='Date').reset_index(drop=True)
             except KeyError as e:
