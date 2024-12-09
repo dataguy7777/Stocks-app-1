@@ -63,6 +63,109 @@ sectors_top10_usa = {
         "Morgan Stanley (MS)", "BlackRock (BLK)", "American Express (AXP)", "U.S. Bancorp (USB)", "Bank of New York Mellon (BK)"
     ],
     "Consumer Discretionary": [
+       
+
+
+
+
+
+Hai detto:
+explain updates briefly at beginning and code changes
+ChatGPT
+
+Ragionamento per 49 secondi
+Brief Explanation of Updates:
+
+To address the KeyError: Index(['Date'], dtype='object') encountered during the drop_duplicates operation, the code has been refactored to improve the merging process of multiple DataFrames. Instead of iteratively merging each DataFrame using pd.merge, which can lead to complications with column management and duplicate entries, the updated approach involves:
+
+Using pd.concat for Merging:
+
+All individual DataFrames are collected into a list and then concatenated along the columns using pd.concat. This ensures a more straightforward and efficient merging process.
+Setting 'Date' as the Index:
+
+Before concatenation, each DataFrame sets 'Date' as its index. This aligns the data based on dates, eliminating the need for duplicate date entries.
+Forward-Filling Missing Values:
+
+Instead of using the deprecated fillna(method='ffill', inplace=True), the code now employs ffill() directly on the DataFrame, adhering to the latest pandas recommendations.
+Removing Redundant Duplicate Handling:
+
+With pd.concat managing the alignment based on the 'Date' index, the previous drop_duplicates step becomes unnecessary and has been removed to prevent the KeyError.
+These changes streamline the data processing workflow, ensuring that the 'Date' column is consistently managed and eliminating the root cause of the duplicate dropping error.
+
+python
+Copia codice
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+import plotly.graph_objs as go
+from datetime import datetime
+import re
+
+# Suppress SettingWithCopyWarning
+pd.options.mode.chained_assignment = None
+
+# Set the page configuration
+st.set_page_config(
+    page_title="Market Indices & Sector ETFs Performance",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Title of the App
+st.title("📈 Market Indices, Sector ETFs & Top 10 USA Stocks Performance Dashboard")
+
+# Define Tabs
+tabs = st.tabs([
+    "Performance Overview", 
+    "Sector ETFs (USA)", 
+    "Top 10 USA Stocks YTD", 
+    "FTSE MIB Italy", 
+    "Additional Insights"
+])
+
+# Define tickers for Performance Overview (USA)
+tickers_usa = {
+    "Nasdaq Composite": "^IXIC",
+    "QQQ (Invesco QQQ Trust)": "QQQ",
+    "S&P 500": "^GSPC",
+    "FTSE MIB (Italy)": "FTSEMIB.MI",
+    "iShares MSCI EAFE ETF": "EFA",
+    "Vanguard FTSE Emerging Markets ETF": "VWO",
+    "SPDR S&P MidCap 400 ETF": "MDY",
+    "iShares Russell 2000 ETF": "IWM",
+    "Vanguard Total Stock Market ETF": "VTI",
+    "iShares MSCI Emerging Markets ETF": "EEM",
+    "iShares Core U.S. Aggregate Bond ETF": "AGG",
+}
+
+# Define Sector ETFs for USA
+sector_etfs_usa = {
+    "Technology": "XLK",
+    "Health Care": "XLV",
+    "Financial": "XLF",
+    "Consumer Discretionary": "XLY",
+    "Industrials": "XLI",
+    "Energy": "XLE",
+    "Materials": "XLB",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+}
+
+# Define Top 10 USA Stocks per Sector
+sectors_top10_usa = {
+    "Technology": [
+        "Apple (AAPL)", "Microsoft (MSFT)", "Alphabet (GOOGL)", "Amazon (AMZN)", "NVIDIA (NVDA)",
+        "Meta Platforms (META)", "Adobe (ADBE)", "Intel (INTC)", "Cisco Systems (CSCO)", "Salesforce (CRM)"
+    ],
+    "Health Care": [
+        "Johnson & Johnson (JNJ)", "Pfizer (PFE)", "UnitedHealth Group (UNH)", "Merck & Co. (MRK)", "Abbott Laboratories (ABT)",
+        "Thermo Fisher Scientific (TMO)", "Amgen (AMGN)", "Eli Lilly (LLY)", "Bristol-Myers Squibb (BMY)", "Gilead Sciences (GILD)"
+    ],
+    "Financial": [
+        "JPMorgan Chase (JPM)", "Bank of America (BAC)", "Wells Fargo (WFC)", "Citigroup (C)", "Goldman Sachs (GS)",
+        "Morgan Stanley (MS)", "BlackRock (BLK)", "American Express (AXP)", "U.S. Bancorp (USB)", "Bank of New York Mellon (BK)"
+    ],
+    "Consumer Discretionary": [
         "Amazon (AMZN)", "Tesla (TSLA)", "Home Depot (HD)", "Nike (NKE)", "Starbucks (SBUX)",
         "McDonald's (MCD)", "Lowe's (LOW)", "Target (TGT)", "Booking Holdings (BKNG)", "Disney (DIS)"
     ],
@@ -88,6 +191,7 @@ sectors_top10_usa = {
     ],
 }
 
+# Define Sector Tickers for FTSE MIB Italy (Replace with actual Italian sector ETFs if available)
 sector_etfs_europe_it = {
     "Technology": "EXV1.DE",
     "Health Care": "EXV4.DE",
@@ -100,6 +204,7 @@ sector_etfs_europe_it = {
     "Real Estate": "EXV5.DE",
 }
 
+# Define Top 10 European Stocks per Sector (Example)
 sectors_top10_europe = {
     "Technology": [
         "ASML Holding (ASML)", "SAP SE (SAP)", "Siemens AG (SIE)", "Infineon Technologies (IFX)", "STMicroelectronics (STM)",
@@ -141,6 +246,9 @@ sectors_top10_europe = {
 
 @st.cache_data
 def fetch_data(ticker, start_date=None, end_date=None):
+    """
+    Fetches historical data for a given ticker.
+    """
     try:
         if start_date and end_date:
             data = yf.download(ticker, start=start_date, end=end_date)
@@ -157,6 +265,9 @@ def fetch_data(ticker, start_date=None, end_date=None):
         return pd.DataFrame()
 
 def sanitize_name(name):
+    """
+    Sanitizes the trace name by removing unwanted characters.
+    """
     if name is None:
         return "Unknown"
     try:
@@ -169,6 +280,9 @@ def sanitize_name(name):
     return sanitized.strip()
 
 def get_first_day_of_year():
+    """
+    Returns the first day of the current year.
+    """
     today = datetime.today()
     return datetime(today.year, 1, 1)
 
@@ -185,7 +299,7 @@ with tabs[0]:
     if user_start_date_perf > user_end_date_perf:
         st.sidebar.error("Error: Start date must be before end date.")
     else:
-        merged_data_perf = pd.DataFrame()
+        data_frames = []
         fetched_tickers_perf = []
         for name, ticker in tickers_usa.items():
             data = fetch_data(ticker, start_date=user_start_date_perf, end_date=user_end_date_perf)
@@ -193,35 +307,28 @@ with tabs[0]:
                 st.warning(f"No data fetched for {name} ({ticker}). Skipping...")
                 continue
             data = data.rename(columns={'Close': name})
-            merged_data_perf = pd.merge(merged_data_perf, data, on='Date', how='outer') if not merged_data_perf.empty else data
+            data.set_index('Date', inplace=True)
+            data_frames.append(data)
             fetched_tickers_perf.append(name)
         
-        if merged_data_perf.empty:
-            st.warning("No data available for the selected date range.")
+        if not data_frames:
+            st.warning("No data available after fetching tickers.")
         else:
-            merged_data_perf.sort_values('Date', inplace=True)
-            merged_data_perf = merged_data_perf.ffill()
-            try:
-                merged_data_perf = merged_data_perf.drop_duplicates(subset=['Date']).reset_index(drop=True)
-            except KeyError as e:
-                st.error(f"Error dropping duplicates: {e}")
-                st.stop()
-            st.write("### Columns in `merged_data_perf` before standardization:")
-            st.write(merged_data_perf.columns.tolist())
-            st.write("### Data Snapshot of `merged_data_perf` before standardization:")
-            st.write(merged_data_perf.head())
-            merged_data_perf.columns = merged_data_perf.columns.str.strip()
-            merged_data_perf.columns = merged_data_perf.columns.str.title()
-            merged_data_perf = merged_data_perf.reset_index(drop=True)
-            if isinstance(merged_data_perf.columns, pd.MultiIndex):
-                merged_data_perf.columns = [' '.join(col).strip() for col in merged_data_perf.columns.values]
+            merged_data_perf = pd.concat(data_frames, axis=1)
+            merged_data_perf = merged_data_perf.ffill().reset_index()
+            
+            # Ensure 'Date' column exists
             if 'Date' not in merged_data_perf.columns:
                 st.error("Error: 'Date' column is missing after merging. Please check the data sources.")
                 st.stop()
-            st.write("### Columns in `merged_data_perf` after standardization:")
+            
+            # Diagnostic Outputs
+            st.write("### Columns in `merged_data_perf` after concatenation:")
             st.write(merged_data_perf.columns.tolist())
-            st.write("### Data Snapshot of `merged_data_perf` after standardization:")
+            st.write("### Data Snapshot of `merged_data_perf` after concatenation:")
             st.write(merged_data_perf.head())
+            
+            # Normalize the data to start at 100 for comparison
             normalized_data_perf = merged_data_perf.copy()
             for column in normalized_data_perf.columns[1:]:
                 initial_value = normalized_data_perf[column].iloc[0]
@@ -230,21 +337,31 @@ with tabs[0]:
                     normalized_data_perf[column] = 0
                 else:
                     normalized_data_perf[column] = (normalized_data_perf[column] / initial_value) * 100
+            
+            # Determine available tickers in the merged DataFrame
             available_tickers_perf = [ticker for ticker in fetched_tickers_perf if ticker in normalized_data_perf.columns]
             if not available_tickers_perf:
                 st.warning("No tickers available after merging.")
             else:
+                # Multiselect for selecting which tickers to display
                 selected_tickers_perf = st.multiselect(
                     "Select Tickers to Display",
                     options=available_tickers_perf,
                     default=available_tickers_perf
                 )
+                
                 if not selected_tickers_perf:
                     st.warning("No tickers selected to display.")
                 else:
+                    # Ensure selected tickers are present in the DataFrame
                     selected_tickers_perf = [ticker for ticker in selected_tickers_perf if ticker in normalized_data_perf.columns]
+                    
+                    # Filter data based on selection
                     filtered_data_perf = normalized_data_perf[['Date'] + selected_tickers_perf]
+                    
+                    # Create Plotly figure
                     fig_perf = go.Figure()
+                    
                     for column in filtered_data_perf.columns[1:]:
                         trace_name = sanitize_name(column)
                         fig_perf.add_trace(go.Scatter(
@@ -253,6 +370,8 @@ with tabs[0]:
                             mode='lines',
                             name=trace_name
                         ))
+                    
+                    # Update layout for better aesthetics
                     fig_perf.update_layout(
                         title="Performance Comparison (Normalized to 100)",
                         xaxis_title="Date",
@@ -267,6 +386,9 @@ with tabs[0]:
                             x=1
                         )
                     )
+                    
                     st.plotly_chart(fig_perf, use_container_width=True)
+                    
+                    # Optional: Display the merged data
                     with st.expander("Show Data Table"):
                         st.dataframe(merged_data_perf.set_index('Date'))
