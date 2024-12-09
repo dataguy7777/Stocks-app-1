@@ -202,7 +202,7 @@ with tabs[0]:
             merged_data_perf.sort_values('Date', inplace=True)
             merged_data_perf.fillna(method='ffill', inplace=True)
             try:
-                merged_data_perf = merged_data_perf.drop_duplicates(subset='Date').reset_index(drop=True)
+                merged_data_perf = merged_data_perf.drop_duplicates(subset=['Date']).reset_index(drop=True)
             except KeyError as e:
                 st.error(f"Error dropping duplicates: {e}")
                 st.stop()
@@ -242,4 +242,31 @@ with tabs[0]:
                 if not selected_tickers_perf:
                     st.warning("No tickers selected to display.")
                 else:
-                    selec
+                    selected_tickers_perf = [ticker for ticker in selected_tickers_perf if ticker in normalized_data_perf.columns]
+                    filtered_data_perf = normalized_data_perf[['Date'] + selected_tickers_perf]
+                    fig_perf = go.Figure()
+                    for column in filtered_data_perf.columns[1:]:
+                        trace_name = sanitize_name(column)
+                        fig_perf.add_trace(go.Scatter(
+                            x=filtered_data_perf['Date'],
+                            y=filtered_data_perf[column],
+                            mode='lines',
+                            name=trace_name
+                        ))
+                    fig_perf.update_layout(
+                        title="Performance Comparison (Normalized to 100)",
+                        xaxis_title="Date",
+                        yaxis_title="Normalized Price",
+                        hovermode="x unified",
+                        template="plotly_dark",
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
+                    st.plotly_chart(fig_perf, use_container_width=True)
+                    with st.expander("Show Data Table"):
+                        st.dataframe(merged_data_perf.set_index('Date'))
